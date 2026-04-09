@@ -1,0 +1,47 @@
+project:
+  name: robust-ai-image-detection
+  seed: 42
+
+dataset:
+  cifake_root: data/raw/cifake
+  split_output_dir: data/splits
+  processed_dir: data/processed
+
+  # Optional explicit class directory aliases.
+  # If empty, keyword-based matching is used.
+  real_dirnames:
+    - real
+    - true
+    - genuine
+    - authentic
+  fake_dirnames:
+    - fake
+    - ai
+    - generated
+    - synthetic
+
+  allowed_extensions:
+    - .jpg
+    - .jpeg
+    - .png
+    - .bmp
+    - .webp
+
+  split_ratios:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+
+loader:
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+
+transforms:
+  image_size: 224
+  train_mode: baseline
+  eval_mode: clean
+  interpolation: bilinear
+
+inspect:
+  grid_max_images: 16
