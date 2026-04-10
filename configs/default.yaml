@@ -1,0 +1,41 @@
+project:
+  name: robust-ai-image-detection
+  seed: 42
+
+dataset:
+  root: data/raw
+  active_name: Data Set 1
+  supported_names:
+    - Data Set 1
+    - Data Set 2
+    - Data Set 3
+    - Data Set 4
+
+  splits:
+    - train
+    - validation
+    - test
+
+  class_to_label:
+    real: 0
+    fake: 1
+
+  allowed_extensions:
+    - .jpg
+    - .jpeg
+
+  metadata_output_dir: data/processed/metadata
+
+loader:
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+
+transforms:
+  image_size: 224
+  train_mode: baseline
+  eval_mode: clean
+  interpolation: bilinear
+
+inspect:
+  grid_max_images: 16
