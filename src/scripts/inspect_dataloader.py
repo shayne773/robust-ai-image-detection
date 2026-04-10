@@ -3,23 +3,23 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import matplotlib.pyplot as plt
-import torch
-from torch.utils.data import DataLoader
-from torchvision.utils import make_grid
-
-from src.datasets.cifake_dataset import CIFAKEDataset
+from src.datasets import FolderImageDataset, build_records_from_predefined_splits
 from src.datasets.transforms import build_eval_transforms, build_train_transforms
+from src.utils.dataset_config import resolve_active_dataset_root, validate_dataset_section
 from src.utils.io import load_yaml
-from src.utils.paths import ensure_dir, resolve_from_root
+from src.utils.paths import ensure_dir
 from src.utils.seed import set_global_seed
+
+if TYPE_CHECKING:
+    import torch
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Inspect CIFAKE DataLoader output.")
+    parser = argparse.ArgumentParser(description="Inspect Data Set 1-4 DataLoader output.")
     parser.add_argument("--config", type=str, default="configs/default.yaml")
-    parser.add_argument("--split", type=str, default="train", choices=["train", "val", "test"])
+    parser.add_argument("--split", type=str, default="train", choices=["train", "validation", "test"])
     parser.add_argument(
         "--save-grid",
         action="store_true",
@@ -47,20 +47,32 @@ def _build_transform(config: dict, split: str):
     )
 
 
-def _unnormalize(images: torch.Tensor) -> torch.Tensor:
+def _unnormalize(images: "torch.Tensor") -> "torch.Tensor":
+    import torch
+
     mean = torch.tensor([0.485, 0.456, 0.406], dtype=images.dtype, device=images.device).view(1, 3, 1, 1)
     std = torch.tensor([0.229, 0.224, 0.225], dtype=images.dtype, device=images.device).view(1, 3, 1, 1)
     return (images * std + mean).clamp(0.0, 1.0)
 
 
-def maybe_save_grid(images: torch.Tensor, split: str, output_dir: Path, max_images: int) -> Path:
+def maybe_save_grid(
+    images: "torch.Tensor",
+    dataset_name: str,
+    split: str,
+    output_dir: Path,
+    max_images: int,
+) -> Path:
+    import matplotlib.pyplot as plt
+    from torchvision.utils import make_grid
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     images = _unnormalize(images[:max_images].cpu())
     nrow = min(4, images.shape[0])
     grid = make_grid(images, nrow=nrow)
 
-    out_path = output_dir / f"inspect_{split}_grid.png"
+    slug = dataset_name.lower().replace(" ", "_")
+    out_path = output_dir / f"inspect_{slug}_{split}_grid.png"
     plt.figure(figsize=(8, 8))
     plt.axis("off")
     plt.imshow(grid.permute(1, 2, 0).numpy())
@@ -72,20 +84,29 @@ def maybe_save_grid(images: torch.Tensor, split: str, output_dir: Path, max_imag
 
 
 def main() -> None:
+    from torch.utils.data import DataLoader
+
     args = parse_args()
     config = load_yaml(args.config)
 
     seed = int(config["project"]["seed"])
     set_global_seed(seed)
+    validate_dataset_section(config)
 
-    split_dir = resolve_from_root(config["dataset"]["split_output_dir"])
-    split_csv = split_dir / f"cifake_{args.split}.csv"
+    dataset_name, dataset_root = resolve_active_dataset_root(config)
+    dcfg = config["dataset"]
+    records = build_records_from_predefined_splits(
+        dataset_root=dataset_root,
+        splits=[str(x) for x in dcfg["splits"]],
+        class_to_label={str(k): int(v) for k, v in dcfg["class_to_label"].items()},
+        allowed_extensions={str(x).lower() for x in dcfg["allowed_extensions"]},
+    )
 
     transform = _build_transform(config, args.split)
-    dataset = CIFAKEDataset(csv_path=split_csv, transform=transform)
+    dataset = FolderImageDataset(records=records, split=args.split, transform=transform)
 
-    labels = [int(x) for x in dataset.df["label"].tolist()]
-    label_counts = Counter(labels)
+    split_records = [r for r in records if r.split == args.split]
+    label_counts = Counter(r.label for r in split_records)
 
     loader_cfg = config["loader"]
     dataloader = DataLoader(
@@ -96,9 +117,11 @@ def main() -> None:
         pin_memory=bool(loader_cfg["pin_memory"]),
     )
 
-    print(f"[inspect_dataloader] Split CSV: {split_csv}")
-    print(f"[inspect_dataloader] Dataset size: {len(dataset)}")
-    print(f"[inspect_dataloader] Class counts: {dict(label_counts)}")
+    print(f"[inspect_dataloader] Active dataset: {dataset_name}")
+    print(f"[inspect_dataloader] Dataset root: {dataset_root}")
+    print(f"[inspect_dataloader] Split: {args.split}")
+    print(f"[inspect_dataloader] Split size: {len(dataset)}")
+    print(f"[inspect_dataloader] Split class counts: {dict(label_counts)}")
 
     batch_images, batch_labels = next(iter(dataloader))
     print(f"[inspect_dataloader] Batch image tensor shape: {tuple(batch_images.shape)}")
@@ -108,7 +131,7 @@ def main() -> None:
     if args.save_grid:
         figures_dir = ensure_dir("outputs/figures")
         max_images = int(config.get("inspect", {}).get("grid_max_images", 16))
-        out_path = maybe_save_grid(batch_images, args.split, figures_dir, max_images=max_images)
+        out_path = maybe_save_grid(batch_images, dataset_name, args.split, figures_dir, max_images=max_images)
         print(f"[inspect_dataloader] Saved image grid: {out_path}")
 
 

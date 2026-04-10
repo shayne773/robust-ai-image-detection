@@ -1,5 +1,5 @@
 """Dataset and transform utilities."""
 
-from .cifake_dataset import CIFAKEDataset
+from .folder_dataset import FolderImageDataset, ImageRecord, build_records_from_predefined_splits
 
-__all__ = ["CIFAKEDataset"]
+__all__ = ["FolderImageDataset", "ImageRecord", "build_records_from_predefined_splits"]

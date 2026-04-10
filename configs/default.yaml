@@ -3,34 +3,28 @@ project:
   seed: 42
 
 dataset:
-  cifake_root: data/raw/cifake
-  split_output_dir: data/splits
-  processed_dir: data/processed
+  root: data/raw
+  active_name: Data Set 1
+  supported_names:
+    - Data Set 1
+    - Data Set 2
+    - Data Set 3
+    - Data Set 4
 
-  # Optional explicit class directory aliases.
-  # If empty, keyword-based matching is used.
-  real_dirnames:
-    - real
-    - true
-    - genuine
-    - authentic
-  fake_dirnames:
-    - fake
-    - ai
-    - generated
-    - synthetic
+  splits:
+    - train
+    - validation
+    - test
+
+  class_to_label:
+    real: 0
+    fake: 1
 
   allowed_extensions:
     - .jpg
     - .jpeg
-    - .png
-    - .bmp
-    - .webp
 
-  split_ratios:
-    train: 0.8
-    val: 0.1
-    test: 0.1
+  metadata_output_dir: data/processed/metadata
 
 loader:
   batch_size: 32
