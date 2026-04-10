@@ -37,5 +37,17 @@ transforms:
   eval_mode: clean
   interpolation: bilinear
 
+model:
+  name: resnet18
+  pretrained: true
+  num_classes: 2
+
+training:
+  epochs: 5
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  checkpoint_dir: outputs/models
+  selection_metric: roc_auc
+
 inspect:
   grid_max_images: 16
