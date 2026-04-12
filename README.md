@@ -63,7 +63,7 @@ This writes split-specific CSV metadata to `data/processed/metadata/` for the cu
 python -m src.scripts.inspect_dataloader --config configs/default.yaml --split train --save-grid
 ```
 
-## 6) Baseline training (new)
+## 6) Training entrypoints
 
 Run end-to-end baseline training:
 
@@ -88,12 +88,65 @@ Checkpoint naming:
 - `outputs/models/best_baseline_<dataset_slug>.pt`
 - `outputs/models/latest_baseline_<dataset_slug>.pt`
 
+Train the aligned / JPEG-conditioned condition:
+
+```bash
+python -m src.scripts.train_aligned --config configs/default.yaml
+```
+
+What it changes vs baseline:
+- applies in-memory JPEG re-encoding to every training image
+- samples quality from `transforms.aligned_jpeg_qualities` (same policy for both classes)
+- keeps validation on clean eval transforms
+
+Checkpoint naming:
+- `outputs/models/best_aligned_<dataset_slug>.pt`
+- `outputs/models/latest_aligned_<dataset_slug>.pt`
+
 ## 7) Transform modes
 
 Implemented now:
 - Train: `mode="baseline"`
+- Train: `mode="aligned"` (JPEG-conditioned training)
 - Eval: `mode="clean"`
+- Eval: `mode="jpeg_eval"` (fixed JPEG degradation before resize/tensor/normalize)
 
-Reserved for later (intentionally not implemented yet):
-- Train: `mode="aligned"` -> raises `NotImplementedError`
-- Eval: `mode="jpeg_eval"` -> raises `NotImplementedError`
+Relevant config fields:
+
+```yaml
+transforms:
+  image_size: 224
+  interpolation: bilinear
+  train_mode: baseline
+  eval_mode: clean
+  aligned_jpeg_qualities: [95, 75, 55]
+  jpeg_eval_quality: 55
+```
+
+## 8) Evaluate a saved checkpoint
+
+Evaluate on clean images:
+
+```bash
+python -m src.scripts.evaluate_checkpoint \
+  --config configs/default.yaml \
+  --checkpoint outputs/models/best_baseline_data_set_1.pt \
+  --split test \
+  --eval-mode clean
+```
+
+Evaluate on JPEG-degraded images:
+
+```bash
+python -m src.scripts.evaluate_checkpoint \
+  --config configs/default.yaml \
+  --checkpoint outputs/models/best_baseline_data_set_1.pt \
+  --split test \
+  --eval-mode jpeg_eval
+```
+
+Use the same command pattern for aligned checkpoints to produce the 2x2 comparison:
+- baseline checkpoint on `clean`
+- baseline checkpoint on `jpeg_eval`
+- aligned checkpoint on `clean`
+- aligned checkpoint on `jpeg_eval`

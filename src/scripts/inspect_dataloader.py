@@ -38,12 +38,14 @@ def _build_transform(config: dict, split: str):
             mode=str(tcfg["train_mode"]),
             image_size=image_size,
             interpolation=interpolation,
+            aligned_jpeg_qualities=[int(q) for q in tcfg.get("aligned_jpeg_qualities", [95, 75, 55])],
         )
 
     return build_eval_transforms(
         mode=str(tcfg["eval_mode"]),
         image_size=image_size,
         interpolation=interpolation,
+        jpeg_eval_quality=int(tcfg.get("jpeg_eval_quality", 55)),
     )
 
 
