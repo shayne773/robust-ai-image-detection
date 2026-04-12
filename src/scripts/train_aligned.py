@@ -19,7 +19,9 @@ from src.utils.seed import set_global_seed
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train a minimal baseline ResNet-18 classifier.")
+    parser = argparse.ArgumentParser(
+        description="Train ResNet-18 with JPEG-conditioned aligned train transforms."
+    )
     parser.add_argument("--config", type=str, default="configs/default.yaml")
     parser.add_argument("--epochs", type=int, default=None, help="Optional epoch override.")
     parser.add_argument("--device", type=str, default=None, help="Optional device override: cpu/cuda")
@@ -40,16 +42,15 @@ def _build_dataloaders(config: dict) -> tuple[str, Path, DataLoader, DataLoader]
     )
 
     train_tf = build_train_transforms(
-        mode=str(tcfg["train_mode"]),
+        mode="aligned",
         image_size=int(tcfg["image_size"]),
         interpolation=str(tcfg.get("interpolation", "bilinear")),
         aligned_jpeg_qualities=[int(q) for q in tcfg.get("aligned_jpeg_qualities", [95, 75, 55])],
     )
     val_tf = build_eval_transforms(
-        mode=str(tcfg["eval_mode"]),
+        mode="clean",
         image_size=int(tcfg["image_size"]),
         interpolation=str(tcfg.get("interpolation", "bilinear")),
-        jpeg_eval_quality=int(tcfg.get("jpeg_eval_quality", 55)),
     )
 
     train_dataset = FolderImageDataset(records=records, split="train", transform=train_tf)
@@ -118,17 +119,17 @@ def main() -> None:
 
     ckpt_dir = ensure_dir(train_cfg["checkpoint_dir"])
     dataset_slug = dataset_name.lower().replace(" ", "_")
-    best_ckpt_path = ckpt_dir / f"best_baseline_{dataset_slug}.pt"
-    latest_ckpt_path = ckpt_dir / f"latest_baseline_{dataset_slug}.pt"
+    best_ckpt_path = ckpt_dir / f"best_aligned_{dataset_slug}.pt"
+    latest_ckpt_path = ckpt_dir / f"latest_aligned_{dataset_slug}.pt"
 
-    print(f"[train_baseline] Active dataset: {dataset_name}")
-    print(f"[train_baseline] Dataset root: {dataset_root}")
-    print(f"[train_baseline] Train size: {len(train_loader.dataset)}")
-    print(f"[train_baseline] Validation size: {len(val_loader.dataset)}")
-    print(f"[train_baseline] Device: {device}")
-    print(f"[train_baseline] Model: resnet18")
-    print(f"[train_baseline] Epochs: {epochs}")
-    print(f"[train_baseline] Selection metric: {metric_name}")
+    print(f"[train_aligned] Active dataset: {dataset_name}")
+    print(f"[train_aligned] Dataset root: {dataset_root}")
+    print(f"[train_aligned] Train size: {len(train_loader.dataset)}")
+    print(f"[train_aligned] Validation size: {len(val_loader.dataset)}")
+    print(f"[train_aligned] Device: {device}")
+    print(f"[train_aligned] Model: resnet18")
+    print(f"[train_aligned] Epochs: {epochs}")
+    print(f"[train_aligned] Selection metric: {metric_name}")
 
     best_metric = float("-inf")
 
@@ -154,7 +155,7 @@ def main() -> None:
         )
 
         print(
-            f"[train_baseline] Epoch {epoch:03d}/{epochs} "
+            f"[train_aligned] Epoch {epoch:03d}/{epochs} "
             f"train_loss={train_loss:.4f} "
             f"val_loss={val_metrics.loss:.4f} "
             f"val_acc={val_metrics.accuracy:.4f} "
@@ -168,7 +169,13 @@ def main() -> None:
             epoch=epoch,
             best_metric=best_metric,
             selection_metric=metric_name,
-            extra={"dataset_name": dataset_name, "config_path": args.config},
+            extra={
+                "dataset_name": dataset_name,
+                "config_path": args.config,
+                "train_condition": "aligned",
+                "train_mode": "aligned",
+                "eval_mode": "clean",
+            },
         )
 
         if selected_val_metric > best_metric:
@@ -180,15 +187,21 @@ def main() -> None:
                 epoch=epoch,
                 best_metric=best_metric,
                 selection_metric=metric_name,
-                extra={"dataset_name": dataset_name, "config_path": args.config},
+                extra={
+                    "dataset_name": dataset_name,
+                    "config_path": args.config,
+                    "train_condition": "aligned",
+                    "train_mode": "aligned",
+                    "eval_mode": "clean",
+                },
             )
             print(
-                f"[train_baseline] New best {metric_name}: {best_metric:.4f}. "
+                f"[train_aligned] New best {metric_name}: {best_metric:.4f}. "
                 f"Saved checkpoint to {best_ckpt_path}"
             )
 
-    print(f"[train_baseline] Training complete. Best {metric_name}: {best_metric:.4f}")
-    print(f"[train_baseline] Best checkpoint: {best_ckpt_path}")
+    print(f"[train_aligned] Training complete. Best {metric_name}: {best_metric:.4f}")
+    print(f"[train_aligned] Best checkpoint: {best_ckpt_path}")
 
 
 if __name__ == "__main__":

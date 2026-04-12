@@ -36,6 +36,8 @@ transforms:
   train_mode: baseline
   eval_mode: clean
   interpolation: bilinear
+  aligned_jpeg_qualities: [95, 75, 55]
+  jpeg_eval_quality: 55
 
 model:
   name: resnet18
