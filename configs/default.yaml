@@ -1,55 +1,37 @@
 project:
   name: robust-ai-image-detection
-  seed: 42
 
 dataset:
-  root: data/raw
-  active_name: Data Set 1
-  supported_names:
-    - Data Set 1
-    - Data Set 2
-    - Data Set 3
-    - Data Set 4
+  root: data
+  generator_dirs:
+    biggan: imagenet_ai_0419_biggan
+    adm: imagenet_ai_0508_adm
+    glide: imagenet_glide
+  train_generators: ["biggan"]
+  eval_generators: ["biggan", "adm", "glide"]
+  train_split: train
+  eval_split: val
+  real_class_name: nature
+  fake_class_name: ai
+  train_percent: 1.0
+  allowed_extensions: [".jpg", ".jpeg", ".png"]
 
-  splits:
-    - train
-    - validation
-    - test
-
-  class_to_label:
-    real: 0
-    fake: 1
-
-  allowed_extensions:
-    - .jpg
-    - .jpeg
-
-  metadata_output_dir: data/processed/metadata
-
-loader:
-  batch_size: 32
-  num_workers: 4
-  pin_memory: true
+preprocessing:
+  train_compression: raw
+  test_compression: raw
 
 transforms:
   image_size: 224
-  train_mode: baseline
-  eval_mode: clean
   interpolation: bilinear
-  aligned_jpeg_qualities: [95, 75, 55]
-  jpeg_eval_quality: 55
 
 model:
-  name: resnet18
+  architecture: resnet50
   pretrained: true
-  num_classes: 2
 
 training:
-  epochs: 5
-  learning_rate: 0.0003
-  weight_decay: 0.0001
+  batch_size: 32
+  epochs: 10
+  lr: 0.0001
+  num_workers: 4
+  seed: 42
   checkpoint_dir: outputs/models
-  selection_metric: roc_auc
-
-inspect:
-  grid_max_images: 16

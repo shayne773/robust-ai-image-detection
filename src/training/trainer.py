@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from src.evaluation.metrics import EvalMetrics, compute_accuracy, compute_roc_auc
+from src.evaluation.metrics import EvalMetrics, compute_accuracy, compute_recall, compute_roc_auc
 
 
 def train_one_epoch(
@@ -78,8 +78,9 @@ def evaluate(
     avg_loss = running_loss / max(sample_count, 1)
     accuracy = compute_accuracy(y_true, y_pred)
     roc_auc = compute_roc_auc(y_true, y_score)
+    recall = compute_recall(y_true, y_pred)
 
-    return EvalMetrics(loss=avg_loss, accuracy=accuracy, roc_auc=roc_auc)
+    return EvalMetrics(loss=avg_loss, accuracy=accuracy, roc_auc=roc_auc, recall=recall)
 
 
 def save_checkpoint(
