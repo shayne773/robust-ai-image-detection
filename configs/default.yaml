@@ -7,6 +7,9 @@ dataset:
     biggan: imagenet_ai_0419_biggan
     adm: imagenet_ai_0508_adm
     glide: imagenet_glide
+    sdv5: imagenet_ai_0424_sdv5
+    sdv4: imagenet_ai_0419_sdv4
+    wukong: imagenet_ai_0424_wukong
   train_generators: ["biggan"]
   eval_generators: ["biggan", "adm", "glide"]
   train_split: train
@@ -20,6 +23,21 @@ preprocessing:
   train_compression: raw
   test_compression: raw
 
+size_constraint:
+  train_generators: ["sdv5", "sdv4", "wukong"]
+  natural_pool_generators: ["sdv5", "sdv4", "wukong"]
+  eval_generators: ["sdv5", "sdv4", "wukong"]
+  train_compression: jpeg96
+  test_compression: jpeg96
+  train_percent: 1.0
+  natural_min_size: 450
+  natural_max_size: 550
+  generated_size: 512
+  crop_size: 450
+  inference_resize_size: 512
+  max_train_samples: null
+  size_cache: outputs/cache/genimage_image_sizes.json
+
 transforms:
   image_size: 224
   interpolation: bilinear
@@ -30,8 +48,10 @@ model:
 
 training:
   batch_size: 32
-  epochs: 10
+  epochs: 3
   lr: 0.0001
+  weight_decay: 0.01
+  selection_metric: roc_auc
   num_workers: 4
   seed: 42
   checkpoint_dir: outputs/models

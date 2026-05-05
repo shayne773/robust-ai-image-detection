@@ -14,6 +14,19 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 SUPPORTED_COMPRESSION_MODES = {"raw": None, "jpeg96": 96, "jpeg95": 95, "jpeg90": 90}
 
 
+def resolve_compression_quality(mode: str) -> int | None:
+    mode = mode.lower()
+    if mode == "raw":
+        return None
+    if mode.startswith("jpeg") and mode[4:].isdigit():
+        quality = int(mode[4:])
+        if 1 <= quality <= 100:
+            return quality
+    raise ValueError(
+        f"Unsupported compression mode '{mode}'. Use 'raw' or 'jpeg' followed by a quality in [1, 100]."
+    )
+
+
 def apply_jpeg_compression(image: Image.Image, quality: int) -> Image.Image:
     buffer = BytesIO()
     image.convert("RGB").save(buffer, format="JPEG", quality=int(quality))
@@ -24,12 +37,8 @@ def apply_jpeg_compression(image: Image.Image, quality: int) -> Image.Image:
 
 class JPEGCompressionTransform:
     def __init__(self, mode: str) -> None:
-        if mode not in SUPPORTED_COMPRESSION_MODES:
-            raise ValueError(
-                f"Unsupported compression mode '{mode}'. Supported: {sorted(SUPPORTED_COMPRESSION_MODES)}"
-            )
-        self.mode = mode
-        self.quality = SUPPORTED_COMPRESSION_MODES[mode]
+        self.mode = mode.lower()
+        self.quality = resolve_compression_quality(self.mode)
 
     def __call__(self, image: Image.Image) -> Image.Image:
         if self.quality is None:
@@ -58,6 +67,30 @@ def build_detector_transforms(
 ) -> transforms.Compose:
     interp = _get_interpolation(interpolation)
     ops: list = [JPEGCompressionTransform(compression_mode), transforms.Resize((image_size, image_size), interpolation=interp)]
+    if is_train:
+        ops.append(transforms.RandomHorizontalFlip(p=0.5))
+    ops.extend([transforms.ToTensor(), transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)])
+    return transforms.Compose(ops)
+
+
+def build_size_constrained_detector_transforms(
+    compression_mode: str,
+    image_size: int,
+    crop_size: int,
+    interpolation: str = "bilinear",
+    is_train: bool = False,
+    inference_resize_size: int | None = None,
+) -> transforms.Compose:
+    interp = _get_interpolation(interpolation)
+    ops: list = [JPEGCompressionTransform(compression_mode)]
+    if inference_resize_size is not None:
+        ops.append(transforms.Resize((inference_resize_size, inference_resize_size), interpolation=interp))
+    ops.extend(
+        [
+            transforms.CenterCrop(crop_size),
+            transforms.Resize((image_size, image_size), interpolation=interp),
+        ]
+    )
     if is_train:
         ops.append(transforms.RandomHorizontalFlip(p=0.5))
     ops.extend([transforms.ToTensor(), transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)])

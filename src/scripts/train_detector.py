@@ -9,7 +9,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
 from src.datasets import GeneratorFolderDataset, build_generator_records, class_balanced_subsample
-from src.datasets.transforms import SUPPORTED_COMPRESSION_MODES, build_detector_transforms
+from src.datasets.transforms import build_detector_transforms, resolve_compression_quality
 from src.models import build_resnet_classifier
 from src.training.trainer import evaluate, save_checkpoint, train_one_epoch
 from src.utils.io import load_yaml
@@ -41,8 +41,7 @@ def main() -> None:
     train_percent = float(args.train_percent if args.train_percent is not None else dcfg['train_percent'])
     model_name = (args.model or mcfg['architecture']).lower()
 
-    if train_compression not in SUPPORTED_COMPRESSION_MODES:
-        raise ValueError(f'Unsupported train compression: {train_compression}')
+    resolve_compression_quality(train_compression)
 
     root = Path(dcfg['root'])
     allowed_ext = {e.lower() for e in dcfg.get('allowed_extensions', ['.jpg', '.jpeg', '.png'])}
