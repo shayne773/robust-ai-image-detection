@@ -100,11 +100,18 @@ class GeneratorFolderDataset(Dataset):
         return len(self.records)
 
     def __getitem__(self, index: int) -> tuple[Tensor, int]:
-        record = self.records[index]
-        image = Image.open(record.image_path).convert("RGB")
-        if self.transform is not None:
-            image = self.transform(image)
-        return image, record.label
+        for offset in range(len(self.records)):
+            record = self.records[(index + offset) % len(self.records)]
+            try:
+                with Image.open(record.image_path) as opened:
+                    image = opened.convert("RGB")
+            except Exception as exc:
+                warnings.warn(f"Skipping unreadable image at load time: {record.image_path} ({exc})")
+                continue
+            if self.transform is not None:
+                image = self.transform(image)
+            return image, record.label
+        raise RuntimeError("No readable images found in GeneratorFolderDataset.")
 
 
 def build_generator_records(
@@ -240,7 +247,7 @@ def _read_image_size(path: Path, size_cache: ImageSizeCache | None = None) -> tu
 def _is_readable_image(path: Path) -> bool:
     try:
         with Image.open(path) as image:
-            image.verify()
+            image.convert("RGB").load()
         return True
     except Exception as exc:
         warnings.warn(f"Skipping unreadable image file: {path} ({exc})")
