@@ -142,6 +142,8 @@ def build_generator_records(
                 if path.stat().st_size == 0:
                     warnings.warn(f"Skipping zero-byte image file: {path}")
                     continue
+                if not _is_readable_image(path):
+                    continue
                 width = height = None
                 if include_image_size:
                     size = _read_image_size(path, size_cache)
@@ -194,6 +196,8 @@ def build_generator_class_records(
             if path.stat().st_size == 0:
                 warnings.warn(f"Skipping zero-byte image file: {path}")
                 continue
+            if not _is_readable_image(path):
+                continue
             width = height = None
             if include_image_size:
                 size = _read_image_size(path, size_cache)
@@ -231,6 +235,16 @@ def _read_image_size(path: Path, size_cache: ImageSizeCache | None = None) -> tu
     except Exception as exc:
         warnings.warn(f"Skipping unreadable image file: {path} ({exc})")
         return None
+
+
+def _is_readable_image(path: Path) -> bool:
+    try:
+        with Image.open(path) as image:
+            image.verify()
+        return True
+    except Exception as exc:
+        warnings.warn(f"Skipping unreadable image file: {path} ({exc})")
+        return False
 
 
 def _infer_imagenet_class(path: Path, class_dir: Path) -> str | None:
