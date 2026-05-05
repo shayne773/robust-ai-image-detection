@@ -28,6 +28,7 @@ class GeneratorImageRecord:
 @dataclass(frozen=True)
 class SizeConstrainedSelectionSummary:
     natural_candidates: int
+    natural_manifest_source: str
     fake_candidates: int
     selected_natural: int
     selected_fake: int
@@ -37,6 +38,7 @@ class SizeConstrainedSelectionSummary:
 
 _IMAGENET_INDEX_RE = re.compile(r"^(\d{1,3})(?:[_-]|$)")
 _WNID_RE = re.compile(r"^(n\d{8})(?:[_\-.]|$)")
+NATURAL_MANIFEST_VERSION = 1
 
 
 class ImageSizeCache:
@@ -312,36 +314,121 @@ def _has_size_in_range(record: GeneratorImageRecord, min_size: int, max_size: in
     )
 
 
-def build_size_constrained_training_records(
+def _record_to_manifest_item(record: GeneratorImageRecord) -> dict[str, Any]:
+    return {
+        "image_path": record.image_path,
+        "label": record.label,
+        "generator": record.generator,
+        "split": record.split,
+        "class_name": record.class_name,
+        "imagenet_class": record.imagenet_class,
+        "width": record.width,
+        "height": record.height,
+    }
+
+
+def _record_from_manifest_item(item: dict[str, Any]) -> GeneratorImageRecord:
+    return GeneratorImageRecord(
+        image_path=str(item["image_path"]),
+        label=int(item["label"]),
+        generator=str(item["generator"]),
+        split=str(item["split"]),
+        class_name=str(item["class_name"]),
+        imagenet_class=item.get("imagenet_class"),
+        width=int(item["width"]) if item.get("width") is not None else None,
+        height=int(item["height"]) if item.get("height") is not None else None,
+    )
+
+
+def build_size_constrained_natural_manifest_metadata(
     dataset_root: Path,
     generator_dirs: dict[str, str],
-    train_generators: list[str],
     natural_pool_generators: list[str],
     split: str,
     real_class_name: str,
-    fake_class_name: str,
     allowed_extensions: set[str],
     natural_min_size: int,
     natural_max_size: int,
-    generated_size: int,
-    train_percent: float,
-    seed: int,
-    max_train_samples: int | None = None,
-    size_cache_path: Path | None = None,
-) -> tuple[list[GeneratorImageRecord], SizeConstrainedSelectionSummary]:
-    if not 0 < train_percent <= 1.0:
-        raise ValueError(f"train_percent must be in (0, 1], got {train_percent}")
-    if natural_min_size > natural_max_size:
-        raise ValueError("natural_min_size must be <= natural_max_size")
-    if generated_size <= 0:
-        raise ValueError("generated_size must be positive.")
-    if not train_generators:
-        raise ValueError("At least one train generator is required.")
-    if not natural_pool_generators:
-        raise ValueError("At least one natural-pool generator is required.")
-    if max_train_samples is not None and max_train_samples < 2:
-        raise ValueError("max_train_samples must be at least 2 when provided.")
+) -> dict[str, Any]:
+    selected_generator_dirs = {
+        generator: generator_dirs[generator]
+        for generator in natural_pool_generators
+    }
+    return {
+        "version": NATURAL_MANIFEST_VERSION,
+        "dataset_root": str(dataset_root.resolve()),
+        "generator_dirs": selected_generator_dirs,
+        "natural_pool_generators": list(natural_pool_generators),
+        "split": split,
+        "class_name": real_class_name,
+        "allowed_extensions": sorted(allowed_extensions),
+        "natural_min_size": int(natural_min_size),
+        "natural_max_size": int(natural_max_size),
+    }
 
+
+def save_size_constrained_natural_manifest(
+    manifest_path: Path,
+    metadata: dict[str, Any],
+    records: list[GeneratorImageRecord],
+) -> None:
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "metadata": metadata,
+        "num_records": len(records),
+        "records": [_record_to_manifest_item(record) for record in records],
+    }
+    temp_path = manifest_path.with_suffix(manifest_path.suffix + ".tmp")
+    temp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    temp_path.replace(manifest_path)
+
+
+def load_size_constrained_natural_manifest(
+    manifest_path: Path,
+    expected_metadata: dict[str, Any],
+) -> list[GeneratorImageRecord]:
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Natural manifest is not valid JSON: {manifest_path}") from exc
+
+    metadata = payload.get("metadata")
+    if metadata != expected_metadata:
+        mismatches: list[str] = []
+        if isinstance(metadata, dict):
+            for key, expected_value in expected_metadata.items():
+                actual_value = metadata.get(key)
+                if actual_value != expected_value:
+                    mismatches.append(f"{key}: expected {expected_value!r}, found {actual_value!r}")
+        else:
+            mismatches.append("metadata: missing or invalid")
+        mismatch_text = "; ".join(mismatches[:8])
+        raise ValueError(
+            f"Natural manifest metadata does not match current settings: {manifest_path}. "
+            f"{mismatch_text}. Use --rebuild-natural-manifest during training, --rebuild during manifest "
+            "preparation, or a different --natural-manifest path."
+        )
+
+    records_payload = payload.get("records", [])
+    if not isinstance(records_payload, list):
+        raise ValueError(f"Natural manifest has invalid records list: {manifest_path}")
+    records = [_record_from_manifest_item(item) for item in records_payload]
+    if not records:
+        raise ValueError(f"Natural manifest contains no records: {manifest_path}")
+    return records
+
+
+def build_size_constrained_natural_records(
+    dataset_root: Path,
+    generator_dirs: dict[str, str],
+    natural_pool_generators: list[str],
+    split: str,
+    real_class_name: str,
+    allowed_extensions: set[str],
+    natural_min_size: int,
+    natural_max_size: int,
+    size_cache_path: Path | None = None,
+) -> list[GeneratorImageRecord]:
     size_cache = ImageSizeCache(size_cache_path) if size_cache_path is not None else None
     try:
         natural_candidates = build_generator_class_records(
@@ -359,12 +446,103 @@ def build_size_constrained_training_records(
         if size_cache is not None:
             size_cache.flush()
 
-    natural_records = _deduplicate_natural_records(
+    return _deduplicate_natural_records(
         [
-            r
-            for r in natural_candidates
-            if _has_size_in_range(r, natural_min_size, natural_max_size)
+            record
+            for record in natural_candidates
+            if _has_size_in_range(record, natural_min_size, natural_max_size)
         ]
+    )
+
+
+def load_or_build_size_constrained_natural_records(
+    dataset_root: Path,
+    generator_dirs: dict[str, str],
+    natural_pool_generators: list[str],
+    split: str,
+    real_class_name: str,
+    allowed_extensions: set[str],
+    natural_min_size: int,
+    natural_max_size: int,
+    size_cache_path: Path | None = None,
+    natural_manifest_path: Path | None = None,
+    rebuild_natural_manifest: bool = False,
+) -> tuple[list[GeneratorImageRecord], str]:
+    metadata = build_size_constrained_natural_manifest_metadata(
+        dataset_root=dataset_root,
+        generator_dirs=generator_dirs,
+        natural_pool_generators=natural_pool_generators,
+        split=split,
+        real_class_name=real_class_name,
+        allowed_extensions=allowed_extensions,
+        natural_min_size=natural_min_size,
+        natural_max_size=natural_max_size,
+    )
+
+    if natural_manifest_path is not None and natural_manifest_path.exists() and not rebuild_natural_manifest:
+        return load_size_constrained_natural_manifest(natural_manifest_path, metadata), "loaded"
+
+    records = build_size_constrained_natural_records(
+        dataset_root=dataset_root,
+        generator_dirs=generator_dirs,
+        natural_pool_generators=natural_pool_generators,
+        split=split,
+        real_class_name=real_class_name,
+        allowed_extensions=allowed_extensions,
+        natural_min_size=natural_min_size,
+        natural_max_size=natural_max_size,
+        size_cache_path=size_cache_path,
+    )
+    if natural_manifest_path is not None:
+        save_size_constrained_natural_manifest(natural_manifest_path, metadata, records)
+        return records, "rebuilt" if rebuild_natural_manifest else "created"
+    return records, "scanned"
+
+
+def build_size_constrained_training_records(
+    dataset_root: Path,
+    generator_dirs: dict[str, str],
+    train_generators: list[str],
+    natural_pool_generators: list[str],
+    split: str,
+    real_class_name: str,
+    fake_class_name: str,
+    allowed_extensions: set[str],
+    natural_min_size: int,
+    natural_max_size: int,
+    generated_size: int,
+    train_percent: float,
+    seed: int,
+    max_train_samples: int | None = None,
+    size_cache_path: Path | None = None,
+    natural_manifest_path: Path | None = None,
+    rebuild_natural_manifest: bool = False,
+) -> tuple[list[GeneratorImageRecord], SizeConstrainedSelectionSummary]:
+    if not 0 < train_percent <= 1.0:
+        raise ValueError(f"train_percent must be in (0, 1], got {train_percent}")
+    if natural_min_size > natural_max_size:
+        raise ValueError("natural_min_size must be <= natural_max_size")
+    if generated_size <= 0:
+        raise ValueError("generated_size must be positive.")
+    if not train_generators:
+        raise ValueError("At least one train generator is required.")
+    if not natural_pool_generators:
+        raise ValueError("At least one natural-pool generator is required.")
+    if max_train_samples is not None and max_train_samples < 2:
+        raise ValueError("max_train_samples must be at least 2 when provided.")
+
+    natural_records, natural_manifest_source = load_or_build_size_constrained_natural_records(
+        dataset_root=dataset_root,
+        generator_dirs=generator_dirs,
+        natural_pool_generators=natural_pool_generators,
+        split=split,
+        real_class_name=real_class_name,
+        allowed_extensions=allowed_extensions,
+        natural_min_size=natural_min_size,
+        natural_max_size=natural_max_size,
+        size_cache_path=size_cache_path,
+        natural_manifest_path=natural_manifest_path,
+        rebuild_natural_manifest=rebuild_natural_manifest,
     )
     fake_by_generator = {
         generator: build_generator_class_records(
@@ -415,6 +593,7 @@ def build_size_constrained_training_records(
     rng.shuffle(selected)
     summary = SizeConstrainedSelectionSummary(
         natural_candidates=len(natural_records),
+        natural_manifest_source=natural_manifest_source,
         fake_candidates=len(fake_records),
         selected_natural=len(selected_natural),
         selected_fake=len(selected_fake),

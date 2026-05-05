@@ -25,7 +25,7 @@ preprocessing:
 
 size_constraint:
   train_generators: ["sdv5", "sdv4", "wukong"]
-  natural_pool_generators: ["sdv5", "sdv4", "wukong"]
+  natural_pool_generators: ["wukong", "sdv4", "sdv5"]
   eval_generators: ["sdv5", "sdv4", "wukong"]
   train_compression: jpeg96
   test_compression: jpeg96
@@ -37,6 +37,7 @@ size_constraint:
   inference_resize_size: 512
   max_train_samples: null
   size_cache: outputs/cache/genimage_image_sizes.json
+  natural_manifest: outputs/splits/size_constrained_natural_wukong-sdv4-sdv5_450-550.json
 
 transforms:
   image_size: 224

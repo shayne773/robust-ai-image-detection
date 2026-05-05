@@ -64,21 +64,33 @@ After adding the paper-style folders under `data/`:
 - `data/imagenet_ai_0419_sdv4`
 - `data/imagenet_ai_0424_wukong`
 
-preview the constrained split first:
+Create the reusable filtered-natural-image manifest once:
+
+```bash
+python -m src.scripts.prepare_size_constrained_natural_manifest \
+  --config configs/default.yaml \
+  --natural-pool-generators wukong sdv4 sdv5 \
+  --natural-min-size 450 \
+  --natural-max-size 550
+```
+
+Preview the constrained split before training:
 
 ```bash
 python -m src.scripts.train_size_constrained_detector \
   --config configs/default.yaml \
+  --train-generators wukong \
+  --natural-pool-generators wukong sdv4 sdv5 \
   --dry-run
 ```
 
-Then train with JPEG96, natural images filtered to `[450, 550]`, generated images assumed to be `512x512`, center-crop `450`, and resize to `224`:
+Then train with JPEG96, natural images loaded from the manifest, generated images assumed to be `512x512`, center-crop `450`, and resize to `224`:
 
 ```bash
 python -m src.scripts.train_size_constrained_detector \
   --config configs/default.yaml \
-  --train-generators sdv5 sdv4 wukong \
-  --natural-pool-generators sdv5 sdv4 wukong \
+  --train-generators wukong \
+  --natural-pool-generators wukong sdv4 sdv5 \
   --train-compression jpeg96 \
   --test-compression jpeg96
 ```
@@ -88,6 +100,8 @@ For quick smoke tests, cap the selected training set:
 ```bash
 python -m src.scripts.train_size_constrained_detector \
   --config configs/default.yaml \
+  --train-generators wukong \
+  --natural-pool-generators wukong sdv4 sdv5 \
   --max-train-samples 2000 \
   --epochs 1
 ```

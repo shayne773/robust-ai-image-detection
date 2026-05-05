@@ -6,8 +6,13 @@ from .generator_dataset import (
     GeneratorImageRecord,
     SizeConstrainedSelectionSummary,
     build_generator_records,
+    build_size_constrained_natural_manifest_metadata,
+    build_size_constrained_natural_records,
     build_size_constrained_training_records,
     class_balanced_subsample,
+    load_or_build_size_constrained_natural_records,
+    load_size_constrained_natural_manifest,
+    save_size_constrained_natural_manifest,
 )
 
 __all__ = [
@@ -18,6 +23,11 @@ __all__ = [
     "GeneratorImageRecord",
     "SizeConstrainedSelectionSummary",
     "build_generator_records",
+    "build_size_constrained_natural_manifest_metadata",
+    "build_size_constrained_natural_records",
     "build_size_constrained_training_records",
     "class_balanced_subsample",
+    "load_or_build_size_constrained_natural_records",
+    "load_size_constrained_natural_manifest",
+    "save_size_constrained_natural_manifest",
 ]

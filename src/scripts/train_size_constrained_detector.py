@@ -44,6 +44,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inference-resize-size", type=int, default=None)
     parser.add_argument("--max-train-samples", type=int, default=None)
     parser.add_argument("--size-cache", default=None, help="Path for persistent image dimension cache.")
+    parser.add_argument("--natural-manifest", default=None, help="Path for reusable filtered natural-image manifest.")
+    parser.add_argument("--rebuild-natural-manifest", action="store_true", help="Rebuild the natural manifest even if it exists.")
     parser.add_argument("--model", default=None)
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -117,6 +119,13 @@ def main() -> None:
     if max_train_samples is not None:
         max_train_samples = int(max_train_samples)
     size_cache = Path(args.size_cache or xcfg.get("size_cache", "outputs/cache/genimage_image_sizes.json"))
+    natural_manifest = Path(
+        args.natural_manifest
+        or xcfg.get(
+            "natural_manifest",
+            "outputs/splits/size_constrained_natural_wukong-sdv4-sdv5_450-550.json",
+        )
+    )
 
     if crop_size > min(natural_min_size, generated_size):
         raise ValueError(
@@ -155,6 +164,8 @@ def main() -> None:
         seed=seed,
         max_train_samples=max_train_samples,
         size_cache_path=size_cache,
+        natural_manifest_path=natural_manifest,
+        rebuild_natural_manifest=bool(args.rebuild_natural_manifest),
     )
     val_records = build_generator_records(
         dataset_root=root,
@@ -176,6 +187,7 @@ def main() -> None:
         print(f"[train_size_constrained] Natural size range: [{natural_min_size}, {natural_max_size}]")
         print(f"[train_size_constrained] Generated exact size: {generated_size}x{generated_size}")
         print(f"[train_size_constrained] Max train samples: {max_train_samples}")
+        print(f"[train_size_constrained] Natural manifest: {natural_manifest}")
         print(f"[train_size_constrained] Selection summary: {asdict(selection_summary)}")
         print(f"[train_size_constrained] Validation size: {len(val_records)}")
         return
@@ -233,6 +245,7 @@ def main() -> None:
     print(f"[train_size_constrained] Natural size range: [{natural_min_size}, {natural_max_size}]")
     print(f"[train_size_constrained] Generated exact size: {generated_size}x{generated_size}")
     print(f"[train_size_constrained] Max train samples: {max_train_samples}")
+    print(f"[train_size_constrained] Natural manifest: {natural_manifest}")
     print(f"[train_size_constrained] Train crop/resize: center-crop {crop_size}, resize {image_size}")
     print(
         "[train_size_constrained] Eval crop/resize: "
@@ -275,6 +288,7 @@ def main() -> None:
                     "generated_size": generated_size,
                     "generated_size_assumption": "generated image dimensions are trusted, not scanned",
                     "max_train_samples": max_train_samples,
+                    "natural_manifest": str(natural_manifest),
                     "crop_size": crop_size,
                     "inference_resize_size": inference_resize_size,
                     "selection_summary": asdict(selection_summary),
