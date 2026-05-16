@@ -56,6 +56,25 @@ python -m src.scripts.evaluate_detector \
 
 Evaluation reports: loss, accuracy, ROC-AUC, recall; and saves JSON under `outputs/eval/`.
 
+## Visualize detector feature spaces
+
+Compare a raw-trained detector against a JPEG90-trained detector for one generator, with four
+groups in 2D: JPEG90-degraded real, JPEG90-degraded fake, raw real, and raw fake.
+
+```bash
+python -m src.scripts.plot_detector_embedding_space \
+  --config configs/default.yaml \
+  --generator adm \
+  --method pca \
+  --jpeg-compression jpeg90 \
+  --max-per-class 250
+```
+
+Use `--generator biggan` or `--generator glide` for the other detector pairs. The default
+checkpoint names match `outputs/models/best_resnet50_train-{generator}_comp-{raw,jpeg90}_pct-0.1.pt`.
+Use `--jpeg-compression jpeg95` or another single JPEG level to compare against a detector trained
+at that same level.
+
 ## Train with size-bias mitigation
 
 After adding the paper-style folders under `data/`:
